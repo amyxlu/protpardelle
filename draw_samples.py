@@ -115,9 +115,9 @@ class Manager(object):
             "--type", type=str, default="allatom", help="Type of model"
         )
         self.parser.add_argument(
-            "--sampling_configdir",
+            "--sampling_configpath",
             type=str,
-            default="configs/sampling.yml",
+            default="configs/sampling.yaml",
             help="Path to sampling config",
         )
         self.parser.add_argument(
@@ -187,7 +187,7 @@ def main():
     device = "cuda:0"
 
     # setting default sampling config
-    sampling_config = utils.load_config(args.sampling_configdir)
+    sampling_config = utils.load_config(args.sampling_configpath)
     if "backbone" in args.type:
         sampling_config = sampling_config.backbone
     elif "allatom" in args.type:
@@ -196,36 +196,36 @@ def main():
 
     # Parse conditioning inputs
     input_pdb_len = None
-    if args.input_pdb:
-        input_feats = utils.load_feats_from_pdb(args.input_pdb, protein_only=True)
-        input_pdb_len = input_feats["aatype"].shape[0]
-        if args.resample_idxs:
-            print(
-                f"Warning: when sampling conditionally, the input pdb length ({input_pdb_len} residues) is used automatically for the sampling lengths."
-            )
-            resample_idxs = parse_idx_string(args.resample_idxs)
-        else:
-            resample_idxs = list(range(input_pdb_len))
-        cond_idxs = [i for i in range(input_pdb_len) if i not in resample_idxs]
-        to_batch_size = lambda x: repeat(x, "... -> b ...", b=samples_per_len).to(
-            device
-        )
+    # if args.input_pdb:
+    #     input_feats = utils.load_feats_from_pdb(args.input_pdb, protein_only=True)
+    #     input_pdb_len = input_feats["aatype"].shape[0]
+    #     if args.resample_idxs:
+    #         print(
+    #             f"Warning: when sampling conditionally, the input pdb length ({input_pdb_len} residues) is used automatically for the sampling lengths."
+    #         )
+    #         resample_idxs = parse_idx_string(args.resample_idxs)
+    #     else:
+    #         resample_idxs = list(range(input_pdb_len))
+    #     cond_idxs = [i for i in range(input_pdb_len) if i not in resample_idxs]
+    #     to_batch_size = lambda x: repeat(x, "... -> b ...", b=samples_per_len).to(
+    #         device
+    #     )
 
-        # For unconditional model, center coords on whole structure
-        centered_coords = data.apply_random_se3(
-            input_feats["atom_positions"],
-            atom_mask=input_feats["atom_mask"],
-            translation_scale=0.0,
-        )
+    #     # For unconditional model, center coords on whole structure
+    #     centered_coords = data.apply_random_se3(
+    #         input_feats["atom_positions"],
+    #         atom_mask=input_feats["atom_mask"],
+    #         translation_scale=0.0,
+    #     )
 
-        cond_kwargs = {}
-        cond_kwargs["gt_coords"] = to_batch_size(centered_coords)
-        cond_kwargs["gt_cond_atom_mask"] = to_batch_size(input_feats["atom_mask"])
-        cond_kwargs["gt_cond_atom_mask"][:, resample_idxs] = 0
-        cond_kwargs["gt_aatype"] = to_batch_size(input_feats["aatype"])
-        cond_kwargs["gt_cond_seq_mask"] = torch.zeros_like(cond_kwargs["gt_aatype"])
-        cond_kwargs["gt_cond_seq_mask"][:, cond_idxs] = 1
-        sampling_kwargs.update(cond_kwargs)
+    #     cond_kwargs = {}
+    #     cond_kwargs["gt_coords"] = to_batch_size(centered_coords)
+    #     cond_kwargs["gt_cond_atom_mask"] = to_batch_size(input_feats["atom_mask"])
+    #     cond_kwargs["gt_cond_atom_mask"][:, resample_idxs] = 0
+    #     cond_kwargs["gt_aatype"] = to_batch_size(input_feats["aatype"])
+    #     cond_kwargs["gt_cond_seq_mask"] = torch.zeros_like(cond_kwargs["gt_aatype"])
+    #     cond_kwargs["gt_cond_seq_mask"][:, cond_idxs] = 1
+    #     sampling_kwargs.update(cond_kwargs)
 
     # Determine lengths to sample at
     if min_len is not None and max_len is not None:
@@ -268,7 +268,7 @@ def main():
     # Load model
     if args.type == "backbone":
         checkpoint = f"{args.model_checkpoint}/backbone_new_state_dict.pth"
-        cfg_path = f"{args.configdir}/backbone.yml"
+        cfg_path = f"{args.model_configdir}/backbone.yml"
         config = utils.load_config(cfg_path)
         weights = torch.load(checkpoint, map_location=device)["model_state_dict"]
         model = models.Protpardelle(config, device=device)
@@ -278,7 +278,7 @@ def main():
         model.device = device
     elif args.type == "allatom":
         checkpoint = f"{args.model_checkpoint}/allatom_state_dict.pth"
-        cfg_path = f"{args.configdir}/allatom.yml"
+        cfg_path = f"{args.model_configdir}/allatom.yml"
         config = utils.load_config(cfg_path)
         weights = torch.load(checkpoint, map_location=device)["model_state_dict"]
         model = models.Protpardelle(config, device=device)
