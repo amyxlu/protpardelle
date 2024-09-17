@@ -117,7 +117,7 @@ class Manager(object):
         self.parser.add_argument(
             "--sampling_configpath",
             type=str,
-            default="configs/sampling.yaml",
+            default="configs/sampling.yml",
             help="Path to sampling config",
         )
         self.parser.add_argument(
